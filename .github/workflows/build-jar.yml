@@ -4,6 +4,8 @@ on:
     branches:
       - main
   workflow_dispatch:
+permissions:
+  contents: write
 jobs:
   build:
     name: Build plugin jar
@@ -18,11 +20,24 @@ jobs:
           cache: 'maven'
       - name: Build
         run: mvn -B -DskipTests package
+      - name: Pick jar
+        id: jar
+        run: |
+          JAR=$(ls target/*.jar | grep -v '/original-' | head -n 1)
+          echo "path=$JAR" >> "$GITHUB_OUTPUT"
+          echo "Built: $JAR"
       - name: Upload jar
         uses: actions/upload-artifact@v4
         with:
           name: CoreProtect-26.3
-          path: |
-            target/*.jar
-            !target/original-*.jar
+          path: ${{ steps.jar.outputs.path }}
           if-no-files-found: error
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="26.3-build-${{ github.run_number }}"
+          gh release create "$TAG" "${{ steps.jar.outputs.path }}" \
+            --repo "${{ github.repository }}" \
+            --title "CoreProtect for Minecraft 26.3 (build ${{ github.run_number }})" \
+            --notes "CoreProtect built from source against Paper API 26.3. Drop the jar into your server's plugins folder."
